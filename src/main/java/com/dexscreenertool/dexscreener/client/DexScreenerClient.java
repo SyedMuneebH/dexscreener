@@ -80,6 +80,7 @@ public class DexScreenerClient {
             pair.setDexId(node.path("dexId").asText());
             pair.setBaseTokenSymbol(node.path("baseToken").path("symbol").asText());
             pair.setQuoteTokenSymbol(node.path("quoteToken").path("symbol").asText());
+            pair.setMarketCap(node.path("marketCap").asDouble());
 
             JsonNode volume = node.path("volume");
             pair.setVolume5m(volume.path("m5").asDouble());

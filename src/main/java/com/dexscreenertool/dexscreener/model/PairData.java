@@ -15,6 +15,7 @@ public class PairData {
     private String dexId;
     private String baseTokenSymbol;
     private String quoteTokenSymbol;
+    private double marketCap;
 
     // Volume fields from volume.h5m / volume.h1 / volume.h6 / volume.h24 in the JSON
     private double volume5m;

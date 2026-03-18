@@ -11,12 +11,5 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class DexScreenerResponse {
-
-    // Top 3 pairs with the largest 5-minute volume spike
-    private List<SpikeAlert> top3By5mSpike;
-
-    // Top 3 pairs with the largest 1-hour volume spike
-    private List<SpikeAlert> top3By1hSpike;
-
-    // TODO: add a timestamp or scanId so responses are traceable
+    private List<PairData> top3;
 }
