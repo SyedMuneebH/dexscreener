@@ -1,20 +1,24 @@
 package com.dexscreenertool.dexscreener.controller;
 
-import com.dexscreenertool.dexscreener.model.DexScreenerRequest;
 import com.dexscreenertool.dexscreener.model.DexScreenerResponse;
 import com.dexscreenertool.dexscreener.service.DexScreenerService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/dexscreener")
+@RequiredArgsConstructor
 public class DexScreenerController {
 
-    @Autowired
-    private DexScreenerService dexscreenerService;
+    private final DexScreenerService dexScreenerService;
 
-    @PostMapping("/monitor")
-    public DexScreenerResponse monitorPair(@RequestBody DexScreenerRequest request) {
-        return dexscreenerService.monitorPair(request);
+    /**
+     * GET /dexscreener/monitor
+     * Manually triggers a volume spike scan using the pair addresses configured in application.properties.
+     * The scheduler also calls the same service method automatically every 30 minutes.
+     */
+    @GetMapping("/monitor")
+    public DexScreenerResponse monitorPairs() {
+        return dexScreenerService.monitorPairs();
     }
 }
