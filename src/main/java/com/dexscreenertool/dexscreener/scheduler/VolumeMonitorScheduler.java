@@ -14,13 +14,13 @@ public class VolumeMonitorScheduler {
     private final DexScreenerService dexScreenerService;
 
     /**
-     * Runs automatically every 30 minutes.
-     * Delegates entirely to the service — no logic here.
+     * Runs every 5 minutes so the 5m volume window is checked on every fresh interval.
+     * The 1h check also runs here but is rate-limited inside the service (max once per 55 min per pair).
      *
-     * fixedDelay = 30 minutes in milliseconds (30 * 60 * 1000)
-     * initialDelay = runs once immediately on startup, then every 30 min after
+     * fixedDelay = 5 minutes in milliseconds (5 * 60 * 1000)
+     * initialDelay = 0 — runs once immediately on startup
      */
-    @Scheduled(fixedDelay = 1_800_000, initialDelay = 0)
+    @Scheduled(fixedDelay = 300_000, initialDelay = 0)
     public void run() {
         log.info("Running volume spike scan...");
         dexScreenerService.monitorPairs();
