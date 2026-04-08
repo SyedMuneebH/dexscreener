@@ -59,6 +59,9 @@ public class HeliusWalletService {
     @Value("${helius.auth.header:}")
     private String authHeader;
 
+    // Lowercased wallet set — built once on startup, used for O(1) lookup in processWebhook
+    private Set<String> walletSet;
+
     // ---------------------------------------------------------------------------
     // Startup — register or update the Helius webhook
     // ---------------------------------------------------------------------------
@@ -69,6 +72,9 @@ public class HeliusWalletService {
             log.warn("No tracked wallets configured — skipping Helius webhook registration.");
             return;
         }
+        walletSet = trackedWallets.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
         try {
             String existingId = findExistingWebhookId();
             if (existingId != null) {
@@ -108,33 +114,31 @@ public class HeliusWalletService {
     }
 
     private String createWebhook() throws Exception {
-        String body = buildWebhookBody();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(HELIUS_WEBHOOKS_URL + "?api-key=" + apiKey))
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .POST(HttpRequest.BodyPublishers.ofString(buildWebhookBody()))
                 .header("Content-Type", "application/json")
                 .build();
-
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200 && response.statusCode() != 201) {
-            throw new RuntimeException("Helius create webhook failed: " + response.statusCode() + " " + response.body());
-        }
-        JsonNode json = objectMapper.readTree(response.body());
-        return json.path("webhookID").asText();
+        return objectMapper.readTree(
+                sendAndCheck(request, "Helius create webhook failed", 200, 201).body()
+        ).path("webhookID").asText();
     }
 
     private void updateWebhook(String webhookId) throws Exception {
-        String body = buildWebhookBody();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(HELIUS_WEBHOOKS_URL + "/" + webhookId + "?api-key=" + apiKey))
-                .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .PUT(HttpRequest.BodyPublishers.ofString(buildWebhookBody()))
                 .header("Content-Type", "application/json")
                 .build();
+        sendAndCheck(request, "Helius update webhook failed", 200);
+    }
 
+    private HttpResponse<String> sendAndCheck(HttpRequest request, String errorContext, int... acceptedCodes) throws Exception {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Helius update webhook failed: " + response.statusCode() + " " + response.body());
+        for (int code : acceptedCodes) {
+            if (code == response.statusCode()) return response;
         }
+        throw new RuntimeException(errorContext + ": " + response.statusCode() + " " + response.body());
     }
 
     private String buildWebhookBody() throws Exception {
@@ -162,47 +166,26 @@ public class HeliusWalletService {
     // ---------------------------------------------------------------------------
 
     /**
-     * Parses the Helius enhanced transaction array and sends a Telegram alert for any
-     * SWAP transaction where a tracked wallet receives tokens (i.e. a buy).
-     *
-     * Expected payload shape (array of enhanced transactions):
-     * [
-     *   {
-     *     "type": "SWAP",
-     *     "source": "RAYDIUM",
-     *     "feePayer": "walletAddress",
-     *     "signature": "txSignature",
-     *     "timestamp": 1234567890,
-     *     "tokenTransfers": [
-     *       { "fromUserAccount": "...", "toUserAccount": "walletAddress",
-     *         "tokenAmount": 1000000.0, "mint": "tokenMint" }
-     *     ],
-     *     "nativeTransfers": [
-     *       { "fromUserAccount": "walletAddress", "toUserAccount": "...", "amount": 1000000000 }
-     *     ]
-     *   }
-     * ]
-     */
-    /**
      * Validates that the request came from Helius by checking the Authorization header.
-     * Returns false (and logs a warning) if the header is configured but doesn't match.
+     * Returns false if the header is configured but doesn't match.
      */
     public boolean isValidRequest(String incomingAuthHeader) {
-        if (authHeader == null || authHeader.isBlank()) return true; // no secret configured, skip check
+        if (authHeader == null || authHeader.isBlank()) return true;
         return authHeader.equals(incomingAuthHeader);
     }
 
+    /**
+     * Parses the Helius enhanced transaction array and sends a Telegram alert for any
+     * SWAP where a tracked wallet receives tokens (i.e. a buy).
+     */
     public void processWebhook(String body) {
+        if (walletSet == null || walletSet.isEmpty()) return;
         try {
             JsonNode root = objectMapper.readTree(body);
             if (!root.isArray()) {
                 log.warn("Unexpected Helius webhook payload shape (not array)");
                 return;
             }
-
-            Set<String> walletSet = trackedWallets.stream()
-                    .map(String::toLowerCase)
-                    .collect(Collectors.toSet());
 
             for (JsonNode tx : root) {
                 String type = tx.path("type").asText();
@@ -238,21 +221,20 @@ public class HeliusWalletService {
 
     private String buildBuyMessage(String wallet, String mint, double tokenAmount,
                                    double solSpent, String dex, String signature) {
-        String shortWallet = wallet.length() > 8
-                ? wallet.substring(0, 4) + "..." + wallet.substring(wallet.length() - 4)
-                : wallet;
-        String shortSig = signature.length() > 12
-                ? signature.substring(0, 6) + "..." + signature.substring(signature.length() - 6)
-                : signature;
-
         return new StringBuilder()
                 .append("\uD83D\uDFE2 Wallet Buy Detected\n")
-                .append("Wallet: ").append(shortWallet).append("\n")
+                .append("Wallet: ").append(shorten(wallet, 4, 8)).append("\n")
                 .append("Token:  ").append(mint).append("\n")
                 .append("Amount: ").append(String.format("%,.2f", tokenAmount)).append(" tokens\n")
                 .append("Spent:  ").append(String.format("%.4f", solSpent)).append(" SOL\n")
                 .append("DEX:    ").append(dex).append("\n")
-                .append("Tx:     ").append(shortSig)
+                .append("Tx:     ").append(shorten(signature, 6, 12))
                 .toString();
+    }
+
+    private static String shorten(String s, int prefix, int threshold) {
+        return s.length() > threshold
+                ? s.substring(0, prefix) + "..." + s.substring(s.length() - prefix)
+                : s;
     }
 }

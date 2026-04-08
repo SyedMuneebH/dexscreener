@@ -3,6 +3,7 @@ package com.dexscreenertool.dexscreener.client;
 import com.dexscreenertool.dexscreener.model.PairData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -21,6 +22,7 @@ import java.util.List;
  *
  * Up to 30 addresses per request. No API key needed.
  */
+@Slf4j
 @Component
 public class DexScreenerClient {
 
@@ -46,7 +48,7 @@ public class DexScreenerClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parsePairs(response.body());
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to fetch pairs from DexScreener: {}", e.getMessage(), e);
             return List.of();
         }
     }

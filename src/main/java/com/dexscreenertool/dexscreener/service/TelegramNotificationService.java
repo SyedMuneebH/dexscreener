@@ -7,19 +7,20 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class TelegramNotificationService {
 
-    // TODO: store your bot token and chat ID as fields (load from application.properties via @Value)
-
     private static final String TELEGRAM_BASE_URL = "https://api.telegram.org/bot";
-       
-    @org.springframework.beans.factory.annotation.Value("${telegram.bot.token}")
+
+    @Value("${telegram.bot.token}")
     private String botToken;
-    
-    @org.springframework.beans.factory.annotation.Value("${telegram.chat.id}")
+
+    @Value("${telegram.chat.id}")
     private String botChatId;
 
     private static final HttpClient httpClient = HttpClient.newHttpClient();
@@ -34,7 +35,7 @@ public class TelegramNotificationService {
         try {
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to send Telegram message: {}", e.getMessage(), e);
         }
     }
 }
